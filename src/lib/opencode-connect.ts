@@ -156,6 +156,7 @@ export type OpenCodeProviderShape = "native" | "legacy"
 export interface OpenCodeProviderModelView {
   id: string
   name: string
+  disabled: boolean
   /** Keys besides `name` (and 2.x's `modelID` alias), kept as they are. */
   extraFieldCount: number
 }
@@ -169,6 +170,8 @@ export interface OpenCodeProviderBlock {
   npm: string
   baseUrl: string
   modelIds: string[]
+  /** Legacy model IDs hidden by Codeg's picker; ignored by OpenCode 2. */
+  blacklist: string[]
   models: Record<string, OpenCodeProviderModelView>
 }
 
@@ -182,6 +185,7 @@ function modelViews(
     views[id] = {
       id,
       name: str(model.name),
+      disabled: model.disabled === true,
       extraFieldCount: Object.keys(model).filter(
         (key) => key !== "name" && key !== "modelID" && key !== "id"
       ).length,
@@ -199,6 +203,7 @@ function nativeView(id: string, block: JsonObject): OpenCodeProviderBlock {
     npm: npmOfPackage(str(block.package)),
     baseUrl: str(asObject(block.settings)?.baseURL),
     modelIds: Object.keys(models),
+    blacklist: stringArray(block.blacklist),
     models,
   }
 }
@@ -215,6 +220,7 @@ function legacyView(id: string, block: JsonObject): OpenCodeProviderBlock {
     // `settings.baseURL` (`v1/config/migrate.ts`).
     baseUrl: str(options?.baseURL) || str(block.api),
     modelIds: Object.keys(models),
+    blacklist: stringArray(block.blacklist),
     models,
   }
 }
@@ -643,6 +649,7 @@ export interface OpenCodeConnectedProvider {
   baseUrl: string
   npm: string
   modelIds: string[]
+  hiddenModelIds: string[]
 }
 
 function connectionKindOf(integration: OpenCodeIntegration | undefined): {
@@ -699,6 +706,12 @@ export function buildConnectedProviders(params: {
       baseUrl: block?.baseUrl ?? "",
       npm: block?.npm ?? "",
       modelIds: block?.modelIds ?? [],
+      hiddenModelIds: [
+        ...(block?.blacklist ?? []),
+        ...Object.values(block?.models ?? {})
+          .filter((model) => model.disabled)
+          .map((model) => model.id),
+      ],
     })
   }
   result.sort(
@@ -741,6 +754,7 @@ export function buildConnectedModelOptions(params: {
     const metaById = new Map(catalog?.models.map((m) => [m.id, m]) ?? [])
     const ids = new Set<string>(provider.modelIds)
     if (catalog) for (const model of catalog.models) ids.add(model.id)
+    for (const modelId of provider.hiddenModelIds) ids.delete(modelId)
     if (ids.size === 0) continue
     groups.push({
       providerId: provider.id,

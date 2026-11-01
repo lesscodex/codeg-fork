@@ -188,5 +188,37 @@ describe(
       expect(saved.provider.relay.models).toEqual(PICKED)
       expect(saved.providers).toBeUndefined()
     })
+
+    it("keeps blacklisted and disabled models out of both default model pickers before the catalog loads", async () => {
+      const user = userEvent.setup()
+      vi.mocked(acpListAgents).mockResolvedValue([
+        openCodeAgent({
+          provider: {
+            relay: {
+              ...LEGACY_CONFIG.provider.relay,
+              blacklist: ["glm-5.2"],
+              models: {
+                ...LEGACY_CONFIG.provider.relay.models,
+                old: { disabled: true },
+              },
+            },
+          },
+        }),
+      ])
+      render(
+        <NextIntlClientProvider locale="en" messages={enMessages}>
+          <AcpAgentSettings />
+        </NextIntlClientProvider>
+      )
+      const inputs = await screen.findAllByPlaceholderText("provider/model-id")
+      expect(inputs).toHaveLength(2)
+      for (const input of inputs) {
+        await user.click(input)
+        expect(
+          screen.queryAllByRole("option", { name: /relay\// })
+        ).toHaveLength(0)
+        await user.keyboard("{Escape}")
+      }
+    })
   }
 )

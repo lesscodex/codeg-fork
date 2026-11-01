@@ -543,6 +543,57 @@ describe("integrations and the panel view", () => {
     })
     expect(groups[1].models.map((m) => m.value)).toEqual(["relay/relay-1"])
   })
+
+  it.each(["provider", "providers"])(
+    "filters %s models through both blacklist and disabled",
+    (key) => {
+      const connected = buildConnectedProviders({
+        config: {
+          [key]: {
+            anthropic: {
+              blacklist: ["claude-x", "vendor/hidden"],
+              models: {
+                "vendor/hidden": {},
+                disabled: { disabled: true },
+                "claude-x-new": { disabled: false },
+              },
+            },
+            relay: {
+              models: {
+                "claude-x": { disabled: false },
+                disabled: { disabled: true },
+              },
+            },
+          },
+        },
+        integrations: [],
+        catalog: CATALOG,
+      })
+      const groups = buildConnectedModelOptions({ connected, catalog: CATALOG })
+      expect(
+        groups.flatMap((group) => group.models.map((m) => m.value))
+      ).toEqual(["anthropic/claude-x-new", "relay/claude-x"])
+    }
+  )
+
+  it.each([{ catalog: [] }, { catalog: CATALOG }])(
+    "omits providers whose models are all blacklisted (catalog size: $catalog.length)",
+    ({ catalog }) => {
+      const connected = buildConnectedProviders({
+        config: {
+          provider: {
+            anthropic: {
+              blacklist: ["claude-x"],
+              models: { "claude-x": {} },
+            },
+          },
+        },
+        integrations: [],
+        catalog,
+      })
+      expect(buildConnectedModelOptions({ connected, catalog })).toEqual([])
+    }
+  )
 })
 
 describe("custom provider ids and labels", () => {
